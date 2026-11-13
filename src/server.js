@@ -20,7 +20,7 @@ app.use(
   cors({
     origin: process.env.CLIENT_ORIGINS
       ? process.env.CLIENT_ORIGINS.split(",").map((o) => o.trim())
-      : ["http://localhost:3000", "https://synchub-rho.vercel.app"],
+      : ["http://localhost:3000", "https://synchub-khaki.vercel.app"],
     credentials: true,
   }),
 );
