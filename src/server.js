@@ -13,7 +13,7 @@ const sharedTaskRoutes = require("./routes/shared.task.routes"); // Added Shared
 const { errorHandler } = require("./middlewares/error.middleware");
 
 const app = express();
-app.set("trust proxy", 1);
+// app.set("trust proxy", 1);
 app.use(helmet());
 
 app.use(
