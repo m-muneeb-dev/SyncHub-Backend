@@ -18,12 +18,12 @@ app.use(helmet());
 
 app.use(
   cors({
-    origin: process.env.CLIENT_ORIGINS
-      ? process.env.CLIENT_ORIGINS.split(",").map((o) => o.trim())
-      : ["http://localhost:3000", "https://synchub-khaki.vercel.app"],
+    origin: process.env.CLIENT_ORIGINS,
     credentials: true,
   }),
 );
+
+console.log("CLIENT_ORIGINS:", process.env.CLIENT_ORIGINS); // Log the CLIENT_ORIGINS value for debugging
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
