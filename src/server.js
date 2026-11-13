@@ -34,12 +34,17 @@ app.use("/api/tasks", taskRouter);
 app.use("/api/friends", friendRequestRoutes);
 app.use("/api/shared-tasks", sharedTaskRoutes); // Mounted Shared Task Routes
 
+// Health check endpoint for Railway / uptime monitors
+app.get("/", (req, res) => {
+  res.status(200).json({ success: true, message: "SyncHub Backend API is running" });
+});
+
 app.use((req, res) => {
   res.status(404).json({ success: false, message: "Route not found" });
 });
 
 app.use(errorHandler);
-const port = process.env.PORT;
+const port = process.env.PORT || 5000;
 
 let server;
 const startServer = async () => {

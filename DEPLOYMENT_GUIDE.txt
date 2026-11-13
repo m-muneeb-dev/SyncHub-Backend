@@ -1,0 +1,291 @@
+================================================================================
+          SYNCHUB - COMPLETE DEPLOYMENT GUIDE (VERCEL + RAILWAY)
+================================================================================
+Frontend: React 19 + Vite + Tailwind CSS  -->  Vercel
+Backend:  Node.js + Express 5 + MongoDB   -->  Railway
+Database: MongoDB Atlas (Cloud)
+================================================================================
+
+TABLE OF CONTENTS:
+------------------
+1. ARCHITECTURE OVERVIEW & DEPLOYMENT STRATEGY
+2. PREREQUISITES CHECKLIST
+3. DATABASE SETUP (MONGODB ATLAS)
+4. STEP 1: DEPLOY BACKEND TO RAILWAY
+5. STEP 2: DEPLOY FRONTEND TO VERCEL
+6. STEP 3: CONNECT FRONTEND & BACKEND (CORS & COOKIES)
+7. STEP 4: GOOGLE OAUTH CONFIGURATION (IF USING GOOGLE SIGN-IN)
+8. CRITICAL CONFIGURATIONS INCLUDED IN CODEBASE
+9. TROUBLESHOOTING & COMMON PITFALLS
+10. DEPLOYMENT VERIFICATION CHECKLIST
+
+================================================================================
+1. ARCHITECTURE OVERVIEW & DEPLOYMENT STRATEGY
+================================================================================
+
+Your application consists of two separate repositories:
+  - Backend:  SyncHub-Backend  (Express.js API)
+  - Frontend: SyncHub-Frontend (Vite / React SPA)
+
+WHY DEPLOY BACKEND FIRST?
+The frontend build requires `VITE_API_BASE_URL` pointing to the live backend
+URL (e.g., https://your-backend.up.railway.app/api). Vite bakes this variable
+into the JavaScript bundle during the build step. Therefore:
+  Step A: Deploy Backend to Railway -> Get public backend URL
+  Step B: Deploy Frontend to Vercel using that backend URL
+  Step C: Update Backend's CLIENT_ORIGINS in Railway with your Vercel URL
+
+
+================================================================================
+2. PREREQUISITES CHECKLIST
+================================================================================
+
+Ensure you have active accounts on:
+  1. GitHub (https://github.com) - with frontend and backend pushed to separate repos
+  2. Railway (https://railway.app)
+  3. Vercel (https://vercel.com)
+  4. MongoDB Atlas (https://cloud.mongodb.com)
+  5. Google Cloud Console (https://console.cloud.google.com) - if using Google Auth
+
+
+================================================================================
+3. DATABASE SETUP (MONGODB ATLAS)
+================================================================================
+
+Railway's servers have dynamic IP addresses, so MongoDB Atlas must accept
+connections from any IP:
+
+1. Log in to MongoDB Atlas: https://cloud.mongodb.com
+2. Go to "Network Access" under the "Security" menu on the left sidebar.
+3. Click "Add IP Address".
+4. Select "Allow Access from Anywhere" (adds 0.0.0.0/0).
+5. Click "Confirm".
+6. Go to "Database Access" and ensure you have a database user created with
+   "Read and write to any database" privileges. Note the username and password.
+7. Go to "Clusters" / "Database" -> Click "Connect" -> "Drivers" -> Choose "Node.js".
+8. Copy the connection string. It looks like:
+   mongodb+srv://<username>:<password>@cluster0.xxxx.mongodb.net/synchubDB?retryWrites=true&w=majority
+   (Replace <username>, <password>, and database name with your credentials).
+
+
+================================================================================
+4. STEP 1: DEPLOY BACKEND TO RAILWAY
+================================================================================
+
+1. PUSH CODE TO GITHUB:
+   Make sure your `SyncHub-Backend` repository is committed and pushed to GitHub:
+     cd SyncHub-Backend
+     git add .
+     git commit -m "Configure health check and deployment settings"
+     git push origin main
+
+2. CREATE PROJECT IN RAILWAY:
+   a. Go to https://railway.app/dashboard
+   b. Click "New Project" (or "+ New").
+   c. Select "Deploy from GitHub repo".
+   d. Connect your GitHub account if prompted and select the `SyncHub-Backend` repo.
+   e. Click "Deploy Now".
+
+3. CONFIGURE ENVIRONMENT VARIABLES IN RAILWAY:
+   a. Click on your newly created backend service in Railway.
+   b. Navigate to the "Variables" tab.
+   c. Click "New Variable" (or "Raw Editor") and add the following:
+
+      PORT=5000
+      NODE_ENV=production
+      CLIENT_ORIGINS=https://synchub-rho.vercel.app
+      JWT_SECRET=your_long_random_secure_jwt_secret_key_here_minimum_32_characters
+      JWT_EXPIRES_IN=1d
+      MONGODB_URI=mongodb+srv://<user>:<password>@cluster0.xxx.mongodb.net/synchubDB?retryWrites=true&w=majority
+      GOOGLE_CLIENT_ID=your_google_client_id.apps.googleusercontent.com
+
+      * Note: You will update CLIENT_ORIGINS in Step 3 once you have your
+        exact Vercel domain.
+
+4. GENERATE A PUBLIC DOMAIN ON RAILWAY:
+   a. In your backend service in Railway, go to the "Settings" tab.
+   b. Scroll down to the "Networking" section.
+   c. Under "Public Networking", click "Generate Domain".
+   d. Railway will provide a URL like:
+      https://synchub-backend-production-xxxx.up.railway.app
+   e. COPY THIS URL. This is your BACKEND_URL.
+
+5. VERIFY BACKEND DEPLOYMENT:
+   Open your browser and visit:
+      https://your-backend.up.railway.app/
+   You should see a JSON response:
+      {"success": true, "message": "SyncHub Backend API is running"}
+
+
+================================================================================
+5. STEP 2: DEPLOY FRONTEND TO VERCEL
+================================================================================
+
+1. VERIFY VERCEL CONFIGURATION (ALREADY CONFIGURED):
+   A `vercel.json` file has been added to `SyncHub-Frontend/vercel.json`:
+   {
+     "rewrites": [
+       { "source": "/(.*)", "destination": "/index.html" }
+     ]
+   }
+   This prevents 404 errors when refreshing protected routes (e.g., /dashboard,
+   /tasks, /friends) on Vercel.
+
+2. PUSH CODE TO GITHUB:
+   Make sure your `SyncHub-Frontend` repository is committed and pushed to GitHub:
+     cd SyncHub-Frontend
+     git add .
+     git commit -m "Add vercel.json rewrite rule for SPA routing"
+     git push origin main
+
+3. IMPORT TO VERCEL:
+   a. Log in to https://vercel.com/dashboard
+   b. Click "Add New..." -> "Project".
+   c. Import your `SyncHub-Frontend` GitHub repository.
+   d. Configure Project Settings:
+      - Framework Preset: Vite (Vercel auto-detects this)
+      - Root Directory: ./
+      - Build Command: npm run build (or vite build)
+      - Output Directory: dist
+      - Install Command: npm install
+
+4. CONFIGURE ENVIRONMENT VARIABLES IN VERCEL:
+   In the "Environment Variables" section before clicking Deploy, add:
+
+   Variable 1:
+     Key:   VITE_API_BASE_URL
+     Value: https://your-backend.up.railway.app/api
+     (Replace with your actual Railway domain generated in Step 1, with `/api` at the end)
+
+   Variable 2:
+     Key:   VITE_GOOGLE_CLIENT_ID
+     Value: 625355564662-0853m26krlkp48a3257o7jhtdbok8bta.apps.googleusercontent.com
+     (Use your Google OAuth Client ID)
+
+5. CLICK "DEPLOY":
+   Vercel will build and deploy your frontend. Once completed, you will receive
+   a live Vercel URL, for example:
+      https://synchub-frontend.vercel.app  (or https://synchub-rho.vercel.app)
+   COPY THIS FRONTEND URL.
+
+
+================================================================================
+6. STEP 3: CONNECT FRONTEND & BACKEND (CORS & COOKIES)
+================================================================================
+
+Now that you have your live Vercel URL, update the backend so cross-origin
+requests and authentication cookies work smoothly:
+
+1. Return to Railway:
+   a. Go to your backend service -> "Variables" tab.
+   b. Find `CLIENT_ORIGINS`.
+   c. Set it to your exact Vercel frontend URL:
+      CLIENT_ORIGINS=https://your-frontend.vercel.app
+
+      * IMPORTANT: Do NOT include a trailing slash!
+        CORRECT:   https://synchub-frontend.vercel.app
+        INCORRECT: https://synchub-frontend.vercel.app/
+
+      * If you have multiple domains (e.g., custom domain and Vercel preview domain),
+        separate them with commas:
+        CLIENT_ORIGINS=https://synchub-frontend.vercel.app,https://synchub-rho.vercel.app,http://localhost:3000
+
+2. Railway will automatically redeploy the backend with the new environment variables.
+
+
+================================================================================
+7. STEP 4: GOOGLE OAUTH CONFIGURATION (IF USING GOOGLE SIGN-IN)
+================================================================================
+
+If you are using Google Sign-In with `@react-oauth/google` and `google-auth-library`:
+
+1. Go to Google Cloud Console: https://console.cloud.google.com/apis/credentials
+2. Select your project.
+3. Click on your OAuth 2.0 Client ID (Web application).
+4. Under "Authorized JavaScript origins", click "+ ADD URI" and add:
+   - https://your-frontend.vercel.app
+   - http://localhost:3000 (for local testing)
+5. Under "Authorized redirect URIs", add:
+   - https://your-frontend.vercel.app
+   - https://your-backend.up.railway.app/api/auth/google (if used as redirect)
+6. Click "SAVE".
+(Changes may take 5 minutes to propagate across Google's servers).
+
+
+================================================================================
+8. CRITICAL CONFIGURATIONS INCLUDED IN CODEBASE
+================================================================================
+
+The SyncHub codebase has already been prepared with the following critical settings:
+
+1. Express Cookie Security (`src/controllers/auth.controller.js`):
+   In production (`NODE_ENV=production`):
+     - `secure: true` (Requires HTTPS - Vercel and Railway both enforce HTTPS)
+     - `sameSite: "none"` (Required for cross-site cookie transmission between
+       vercel.app and up.railway.app)
+     - `httpOnly: true` (Protects token from XSS attacks)
+
+2. Reverse Proxy Trust (`src/server.js`):
+   - `app.set("trust proxy", 1);` is enabled so Railway's reverse proxy headers
+     are respected for secure cookies and rate-limiting.
+
+3. Axios Interceptor & Credentials (`src/services/api.jsx`):
+   - `withCredentials: true` is enabled so the browser sends and receives cookies.
+   - Authorization Bearer header is also attached as a dual fallback.
+
+4. Single Page Application Rewrites (`SyncHub-Frontend/vercel.json`):
+   - Direct link visits and page reloads are routed to index.html so React Router
+     handles client-side routes without 404 errors.
+
+5. Health Check Endpoint (`src/server.js`):
+   - `GET /` returns HTTP 200 OK for Railway health checks and monitoring.
+
+
+================================================================================
+9. TROUBLESHOOTING & COMMON PITFALLS
+================================================================================
+
+Q1: CORS Error in Browser Console ("Access-Control-Allow-Origin missing"):
+    - Cause: `CLIENT_ORIGINS` in Railway does not exactly match your Vercel URL.
+    - Solution: Check Railway Variables. Ensure `CLIENT_ORIGINS` matches the
+      exact protocol and domain without trailing slash (e.g. `https://my-app.vercel.app`).
+
+Q2: 404 Not Found on Page Reload in Vercel:
+    - Cause: Missing SPA rewrite rules.
+    - Solution: Ensure `vercel.json` is committed and pushed to the root of
+      your frontend repository.
+
+Q3: Login works, but subsequent requests show 401 Unauthorized:
+    - Cause: Third-party cookies blocked or `sameSite` / `secure` misconfigured.
+    - Solution: In production, `NODE_ENV` must be set to `production` in Railway.
+      Ensure backend has `secure: true` and `sameSite: "none"` (already configured).
+      Also ensure frontend Axios has `withCredentials: true`.
+
+Q4: Backend Fails to Start or Crashes on Railway:
+    - Cause 1: Missing environment variables (`MONGODB_URI`, `JWT_SECRET`).
+    - Cause 2: MongoDB Atlas IP whitelist blocking Railway.
+    - Solution: Go to Railway -> Service -> "Deployments" -> Click "View Logs"
+      to read the exact error. If MongooseServerSelectionError, add `0.0.0.0/0`
+      to MongoDB Atlas Network Access.
+
+Q5: Frontend API calls point to localhost:5000 in production:
+    - Cause: `VITE_API_BASE_URL` was not set in Vercel before building.
+    - Solution: Add `VITE_API_BASE_URL` in Vercel Project Settings -> Environment
+      Variables. Then trigger a Redeploy (Deployments -> ... -> Redeploy).
+
+
+================================================================================
+10. DEPLOYMENT VERIFICATION CHECKLIST
+================================================================================
+
+[ ] MongoDB Atlas allows 0.0.0.0/0 under Network Access.
+[ ] Railway backend deployed with all 7 environment variables set.
+[ ] Railway backend domain generated (https://...up.railway.app).
+[ ] Visiting Railway backend URL root (/) returns {"success": true, ...}.
+[ ] Vercel frontend deployed with VITE_API_BASE_URL and VITE_GOOGLE_CLIENT_ID.
+[ ] Railway CLIENT_ORIGINS updated with the Vercel production URL.
+[ ] User can register a new account and log in.
+[ ] Tasks can be created, updated, and deleted.
+[ ] Page refresh on /dashboard or /tasks does not throw 404.
+[ ] Google Sign-In origins updated in Google Cloud Console.
+================================================================================
