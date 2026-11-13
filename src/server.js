@@ -13,46 +13,51 @@ const sharedTaskRoutes = require("./routes/shared.task.routes"); // Added Shared
 const { errorHandler } = require("./middlewares/error.middleware");
 
 const app = express();
+app.set("trust proxy", 1);
 app.use(helmet());
 
-app.use(cors({
-    origin: process.env.CLIENT_ORIGINS?.split(",") || ["http://localhost:3000", "http://localhost:5173"],
-    credentials: true
-}));
+app.use(
+  cors({
+    origin: process.env.CLIENT_ORIGINS
+      ? process.env.CLIENT_ORIGINS.split(",").map((o) => o.trim())
+      : ["http://localhost:3000", "https://synchub-rho.vercel.app"],
+    credentials: true,
+  }),
+);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-app.use('/api/auth', authRouter);
-app.use('/api/tasks', taskRouter);
+app.use("/api/auth", authRouter);
+app.use("/api/tasks", taskRouter);
 app.use("/api/friends", friendRequestRoutes);
-app.use('/api/shared-tasks', sharedTaskRoutes); // Mounted Shared Task Routes
+app.use("/api/shared-tasks", sharedTaskRoutes); // Mounted Shared Task Routes
 
 app.use((req, res) => {
-    res.status(404).json({ success: false, message: "Route not found" });
+  res.status(404).json({ success: false, message: "Route not found" });
 });
 
 app.use(errorHandler);
-const port = process.env.PORT || 5000;
+const port = process.env.PORT;
 
 let server;
 const startServer = async () => {
-    try {
-        await connectDB();
+  try {
+    await connectDB();
 
-        server = app.listen(port, () => {
-            console.log(`Server running on port ${port}`);
-        });
-        return server;
-    } catch (error) {
-        console.error("Server startup failed:", error.message);
-        process.exit(1);
-    }
+    server = app.listen(port, () => {
+      console.log(`Server running on port ${port}`);
+    });
+    return server;
+  } catch (error) {
+    console.error("Server startup failed:", error.message);
+    process.exit(1);
+  }
 };
 
 if (process.env.NODE_ENV !== "test") {
-    startServer();
+  startServer();
 }
 
 module.exports = { app, startServer };
