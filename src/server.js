@@ -4,7 +4,7 @@ const cors = require("cors");
 const helmet = require("helmet");
 const cookieParser = require("cookie-parser");
 const connectDB = require("./config/db");
-const rateLimit = require("express-rate-limit");
+// const rateLimit = require("express-rate-limit");
 
 const authRouter = require("./routes/auth.route");
 const taskRouter = require("./routes/task.route");
