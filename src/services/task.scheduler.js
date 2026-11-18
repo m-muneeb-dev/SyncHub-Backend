@@ -1,11 +1,9 @@
 const cron = require('node-cron');
 const nodemailer = require('nodemailer');
-const mongoose = require('mongoose');
 const Task = require('../models/task.model');
-const SharedTask = require('../models/shared.task.model');
-const { buildTaskEmail } = require('../utils/email.util'); // <-- Importing from utility file
+const { buildTaskEmail } = require('../utils/email.util');
 
-// Configure Email Transporter
+// 1. Email Transporter Setup
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: process.env.SMTP_PORT,
@@ -15,110 +13,80 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-// Cron Job (Test Mode: every 1 minute using 5 stars)
-cron.schedule('0 8 * * *', async () => {
-  console.log('Running task notification check (Test Mode)...');
+// 2. Helper Function: Safe Email Sender
+const sendEmail = async (task, type) => {
+  try {
+    await task.populate('owner_id', 'email name');
+    if (!task.owner_id?.email) return;
+
+    const ownerName = task.owner_id.name || 'User';
+
+    const { subject, text, html } = buildTaskEmail({
+      type,
+      task,
+      recipientName: ownerName,
+      assignedBy: ownerName
+    });
+
+    await transporter.sendMail({
+      from: `"SyncHub" <${process.env.SMTP_USER || 'no-reply@yourdomain.com'}>`,
+      to: task.owner_id.email,
+      subject,
+      text,
+      html
+    });
+
+    console.log(`Email sent (${type}) for: "${task.title}" to ${task.owner_id.email}`);
+  } catch (err) {
+    console.error(`Failed to send (${type}) email for task "${task.title}":`, err.message);
+  }
+};
+
+// 3. Cron Job: Rozana Pakistan ke raat 12:00 AM par chalega
+cron.schedule('0 0 * * *', async () => {
+  console.log('Running daily task notification check (12:00 AM PKT)...');
 
   try {
+    // Pakistan Time (UTC+5) ke mutabiq Aaj raat 12:00 AM ka exact timestamp
     const now = new Date();
+    const pktNow = new Date(now.getTime() + 5 * 60 * 60 * 1000);
 
-    const tomorrowStart = new Date(now);
-    tomorrowStart.setDate(now.getDate() + 1);
-    tomorrowStart.setHours(0, 0, 0, 0);
+    const todayStart = new Date(Date.UTC(
+      pktNow.getUTCFullYear(),
+      pktNow.getUTCMonth(),
+      pktNow.getUTCDate(),
+      0, 0, 0, 0
+    ));
+    todayStart.setUTCHours(todayStart.getUTCHours() - 5);
 
-    const tomorrowEnd = new Date(tomorrowStart);
-    tomorrowEnd.setHours(23, 59, 59, 999);
+    const tomorrowStart = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+    const tomorrowEnd = new Date(tomorrowStart.getTime() + 24 * 60 * 60 * 1000 - 1);
 
-    const todayStart = new Date(now);
-    todayStart.setHours(0, 0, 0, 0);
-
-    const logCollection = mongoose.connection.db.collection('task_notification_logs');
-    const notCompleted = { status: { $ne: 'completed' } };
-
-    const sendTaskNotification = async (task, type) => {
-      await task.populate('owner_id', 'email name');
-      if (!task.owner_id || !task.owner_id.email) return false;
-
-      const ownerEmail = task.owner_id.email;
-
-      const sharedTasks = await SharedTask.find({ task_id: task._id })
-        .populate('collaborator', 'email')
-        .populate('shared_by', 'email name');
-
-      const collaboratorEmails = sharedTasks
-        .map(st => st.collaborator?.email)
-        .filter(Boolean);
-
-      const sharedByName = sharedTasks[0]?.shared_by?.name || task.owner_id.name || 'Owner';
-
-      // Using the imported email template helper
-      const { subject, text, html } = buildTaskEmail({
-        type,
-        task,
-        recipientName: task.owner_id.name,
-        assignedBy: sharedByName
-      });
-
-      const mailOptions = {
-        from: '"SyncHub" <no-reply@yourdomain.com>',
-        to: ownerEmail,
-        subject,
-        text,
-        html
-      };
-
-      if (collaboratorEmails.length > 0) {
-        mailOptions.cc = collaboratorEmails;
-      }
-
-      await transporter.sendMail(mailOptions);
-      console.log(`Email sent (${type}) for task: "${task.title}" to Owner (${ownerEmail})`);
-      return true;
-    };
-
-    const notifyOnce = async (task, type) => {
-      try {
-        const alreadyNotified = await logCollection.findOne({ task_id: task._id, type });
-        if (alreadyNotified) return;
-
-        const sent = await sendTaskNotification(task, type);
-        if (!sent) return;
-
-        await logCollection.insertOne({
-          task_id: task._id,
-          type,
-          sent_at: new Date()
-        });
-      } catch (err) {
-        console.error(`Failed to send (${type}) notification for task ${task._id}:`, err.message);
-      }
-    };
-
-    // A. Check "Due Tomorrow" Tasks
+    // A. Kal due hone wale tasks (Pre-due)
     const upcomingTasks = await Task.find({
-      ...notCompleted,
+      status: { $ne: 'completed' },
       dueDate: { $gte: tomorrowStart, $lte: tomorrowEnd }
     });
 
     for (const task of upcomingTasks) {
-      await notifyOnce(task, 'pre-due');
+      await sendEmail(task, 'pre-due');
     }
 
-    // B. Check "Overdue" Tasks
+    // B. Overdue tasks
     const overdueTasks = await Task.find({
-      ...notCompleted,
+      status: { $ne: 'completed' },
       dueDate: { $lt: todayStart }
     });
 
     for (const task of overdueTasks) {
-      await notifyOnce(task, 'overdue');
+      await sendEmail(task, 'overdue');
     }
 
-    console.log('Task notifications check completed.');
+    console.log('Daily task notification check completed.');
   } catch (err) {
-    console.error('Error in task notification scheduler:', err);
+    console.error('Cron Error:', err.message);
   }
 }, {
   scheduled: true,
-  timezone: "UTC"
+  timezone: 'Asia/Karachi'
 });
