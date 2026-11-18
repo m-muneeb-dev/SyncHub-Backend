@@ -50,6 +50,7 @@ let server;
 const startServer = async () => {
   try {
     await connectDB();
+    require("./services/task.scheduler.js");
 
     server = app.listen(port, () => {
       console.log(`Server running on port ${port}`);

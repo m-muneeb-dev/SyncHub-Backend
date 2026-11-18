@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const friendRequest = require("../models/friend.request.model");
 const User = require("../models/user.model");
 const { asyncHandler } = require("../middlewares/error.middleware");
@@ -82,6 +83,22 @@ const getFriendRequest = asyncHandler(async (req, res) => {
         status: "pending"
     })
     .populate("requester", "name email")
+    .sort({ createdAt: -1 })
+    .lean();
+
+    return res.status(200).json({
+        success: true,
+        count: requests.length,
+        requests
+    });
+});
+
+const getSentFriendRequests = asyncHandler(async (req, res) => {
+    const requests = await friendRequest.find({
+        requester: req.user._id,
+        status: "pending"
+    })
+    .populate("recipient", "name email")
     .sort({ createdAt: -1 })
     .lean();
 
@@ -185,6 +202,13 @@ const getFriends = asyncHandler(async (req, res) => {
 const cancelFriendRequest = asyncHandler(async (req, res) => {
     const { requestId } = req.params;
 
+    if (!mongoose.Types.ObjectId.isValid(requestId)) {
+        return res.status(400).json({
+            success: false,
+            message: "Invalid friend request ID"
+        });
+    }
+
     const isRequestPending = await friendRequest.findOne({
         _id: requestId,
         requester: req.user._id,
@@ -243,6 +267,7 @@ const deleteFriend = asyncHandler(async (req, res) => {
 module.exports = {
     sendFriendRequest,
     getFriendRequest,
+    getSentFriendRequests,
     acceptFriendRequest,
     rejectFriendRequest,
     getFriends,
